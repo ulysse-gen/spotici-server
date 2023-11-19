@@ -44,11 +44,11 @@ export default class TrackManager {
     }
 
     async createTrackOnDB(Track: Track) {
-        return db.execute('INSERT INTO `tracks` (`id`, `name`, `album`, `albumName`, `artists`, `artistsNames`, `duration_ms`, `release`) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `tracks` WHERE `id`=?)', [Track.id, Track.name, Track.album.id, Track.album.name, JSON.stringify(Track.artists.map(artist => artist.id)), JSON.stringify(Track.artists.map(artist => artist.name)), Track.duration_ms, Track.release, Track.id]);
+        return db.execute('INSERT INTO `tracks` (`id`, `name`, `album`, `albumName`, `artists`, `artistsNames`, `duration_ms`, `release`, `disc_number`, `track_number`) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `tracks` WHERE `id`=?)', [Track.id, Track.name, Track.album.id, Track.album.name, JSON.stringify(Track.artists.map(artist => artist.id)), JSON.stringify(Track.artists.map(artist => artist.name)), Track.duration_ms, Track.release, Track.disc_number, Track.track_number, Track.id]);
     }
 
     async createTracksOnDB(Tracks: Array<Track>) {
-        let Queries = Tracks.map(Track => { return { sql: 'INSERT INTO `tracks` (`id`, `name`, `album`, `albumName`, `artists`, `artistsNames`, `duration_ms`, `release`) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `tracks` WHERE `id`=?)', params: [Track.id, Track.name, Track.album.id, Track.album.name, JSON.stringify(Track.artists.map(artist => artist.id)), JSON.stringify(Track.artists.map(artist => artist.name)), Track.duration_ms, Track.release, Track.id]}});
+        let Queries = Tracks.map(Track => { return { sql: 'INSERT INTO `tracks` (`id`, `name`, `album`, `albumName`, `artists`, `artistsNames`, `duration_ms`, `release`, `disc_number`, `track_number`) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `tracks` WHERE `id`=?)', params: [Track.id, Track.name, Track.album.id, Track.album.name, JSON.stringify(Track.artists.map(artist => artist.id)), JSON.stringify(Track.artists.map(artist => artist.name)), Track.duration_ms, Track.release, Track.disc_number, Track.track_number, Track.id]}});
         return db.queryTransaction(Queries);
     }
 }

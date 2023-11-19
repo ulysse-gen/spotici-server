@@ -41,6 +41,8 @@ declare global {
       artistsNames: string;
       duration_ms: number;
       release: string;
+      track_number: number;
+      disc_number: number;
     }
 
     interface DBAlbum {
@@ -50,6 +52,8 @@ declare global {
       artists: string;
       artistsNames: string;
       release: string;
+      total_tracks: number;
+      image: string | undefined;
     }
 
     interface DBArtist {

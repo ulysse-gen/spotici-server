@@ -15,6 +15,9 @@ export default class Track {
     public artists!: Artist[];
     public duration_ms!: number;
     public release!: string;
+    public disc_number!: number;
+    public track_number!: number;
+
     public artistsNames!: string[];
     public MP3Buffer?: Buffer;
     constructor() {
@@ -28,6 +31,8 @@ export default class Track {
         this.artistsNames = TrackObject.artists.map(artist => artist.name);
         this.duration_ms = TrackObject.duration_ms;
         this.release = TrackObject.album.release_date;
+        this.disc_number = TrackObject.disc_number;
+        this.track_number = TrackObject.track_number;
         return this;
     }
 
@@ -39,6 +44,8 @@ export default class Track {
         this.artistsNames = JSON.parse(TrackObject.artistsNames);
         this.duration_ms = TrackObject.duration_ms;
         this.release = TrackObject.release;
+        this.disc_number = TrackObject.disc_number;
+        this.track_number = TrackObject.track_number;
         return this;
     }
 

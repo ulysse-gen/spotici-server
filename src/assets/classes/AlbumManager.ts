@@ -46,11 +46,11 @@ export default class AlbumManager {
     }
 
     async createAlbumOnDB(Album: Album) {
-        return db.execute('INSERT INTO `albums` (`id`, `name`, `artists`, `artistsNames`, `release`) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `albums` WHERE `id`=?)', [Album.id, Album.name, JSON.stringify(Album.artists.map(artist => artist.id)), JSON.stringify(Album.artists.map(artist => artist.name)), Album.release, Album.id]);
+        return db.execute('INSERT INTO `albums` (`id`, `name`, `artists`, `artistsNames`, `release`, `total_tracks`, `image`) SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `albums` WHERE `id`=?)', [Album.id, Album.name, JSON.stringify(Album.artists.map(artist => artist.id)), JSON.stringify(Album.artists.map(artist => artist.name)), Album.release, Album.total_tracks, Album.image, Album.id]);
     }
 
     async createAlbumsOnDB(Albums: Array<Album>) {
-        let Queries = Albums.map(Album => { return { sql: 'INSERT INTO `albums` (`id`, `name`, `artists`, `artistsNames`, `release`) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `albums` WHERE `id`=?)', params: [Album.id, Album.name, JSON.stringify(Album.artists.map(artist => artist.id)), JSON.stringify(Album.artists.map(artist => artist.name)), Album.release, Album.id]}});
+        let Queries = Albums.map(Album => { return { sql: 'INSERT INTO `albums` (`id`, `name`, `artists`, `artistsNames`, `release`, `total_tracks`, `image`) SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `albums` WHERE `id`=?)', params: [Album.id, Album.name, JSON.stringify(Album.artists.map(artist => artist.id)), JSON.stringify(Album.artists.map(artist => artist.name)), Album.release, Album.total_tracks, Album.image, Album.id]}});
         return db.queryTransaction(Queries);
     }
 }
