@@ -60,6 +60,7 @@ declare global {
       numId: number;
       id: string;
       name: string;
+      image?: string;
     }
 
     interface FileTrack {

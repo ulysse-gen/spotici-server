@@ -42,7 +42,55 @@ export async function query (req: express.Request, res: express.Response) {
   });
 }
 
-export async function queryForce (req: express.Request, res: express.Response) {
+export async function queryFrom (req: express.Request, res: express.Response) {
+  const { query, from = "10" } = req.params;
+
+  if (!query)return res.status(400).json({
+      name   : req.t('name'), 
+      status : 400, 
+      message: req.t('route.tracks.query.query_required')
+  });
+
+  if (!from)return res.status(400).json({
+    name   : req.t('name'), 
+    status : 400, 
+    message: req.t('route.tracks.query.from_required')
+  });
+
+  const fromNumb = parseInt(from);
+  if (!fromNumb || typeof fromNumb != "number")return res.status(400).json({
+    name   : req.t('name'), 
+    status : 400, 
+    message: req.t('route.tracks.query.from_is_not_number')
+  });
+
+  let results = {
+    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.DBTrack>,
+    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.DBArtist>,
+    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.DBAlbum>,
+    playlists: []
+  }
+
+  const Tracks = results.tracks.map(async TrackObject => SPOTICI_TRACKMANAGER.getTrack(await new Track().FromDB(TrackObject)));
+  const Albums = results.albums.map(async AlbumObject => SPOTICI_ALBUMMANAGER.getAlbum(await new Album().FromDB(AlbumObject)));
+  const Artists = results.artists.map(async ArtistObject => SPOTICI_ARTISTMANAGER.getArtist(await new Artist().FromDB(ArtistObject)));
+
+  let SearchData = {
+    tracks: await Promise.all(Tracks),
+    artists: await Promise.all(Albums),
+    albums: await Promise.all(Artists),
+    playlists: []
+  }
+
+  return res.status(200).json({
+    name   : req.t('name'), 
+    status : 200, 
+    message: req.t('route.tracks.query.success'),
+    data: SearchData
+  });
+}
+
+export async function querySpotify (req: express.Request, res: express.Response) {
   const { query } = req.params;
 
   if (!query)return res.status(400).json({
@@ -51,33 +99,40 @@ export async function queryForce (req: express.Request, res: express.Response) {
       message: req.t('route.tracks.query.query_required')
   });
 
-  const results = await spotifyApi.search(query, ["album", "artist", "playlist", "track"]).catch(async err => {
-    return spotifyApi.refreshAccessToken().then(data => {
-      spotifyApi.setAccessToken(data.body['access_token']);
-    });
-  }).catch(err => {
-    return null;
-  }).then(async () => {
-    return spotifyApi.search(query, ["album", "artist", "playlist", "track"])
-  }).catch(err => {
-    return null;
+  const SpotifyRefreshToken = spotifyApi.refreshAccessToken().then(result => {
+    console.log(`Refreshed Spotify's API token.`)
+    spotifyApi.setAccessToken(result.body['access_token']);
+    return;
+  }).catch(error => {
+    console.log(`An error occured while trying to refresh Spotify's API token:`, error);
+    return undefined;
   });
-  if (!results)return res.status(500).json({
+
+  const SpotifySearch = spotifyApi.search(query, ["album", "artist", "playlist", "track"]).catch(() => undefined);
+
+  const SpotifyResults = await SpotifySearch.catch(error => {
+    return console.log(`An error occured while trying to fetch Spotify's API: `, error);
+  }).catch(async () => SpotifyRefreshToken.then(async () => {
+    return SpotifySearch;
+  }));
+
+  if (!SpotifyResults)return res.status(500).json({
     name   : req.t('name'), 
     status : 500, 
     message: req.t('route.tracks.query.failure')
-  }); 
-  let Tracks = results.body.tracks?.items.map(TrackObject => {
+  });
+
+  let Tracks = SpotifyResults.body.tracks?.items.map(TrackObject => {
     const TrackItem = new Track().FromSpotify(TrackObject);
     SPOTICI_TRACKMANAGER.getTrack(TrackItem);
     return TrackItem;
   });
-  let Albums = results.body.albums?.items.map(AlbumObject => {
+  let Albums = SpotifyResults.body.albums?.items.map(AlbumObject => {
     const AlbumItem = new Album().FromSpotify(AlbumObject);
     SPOTICI_ALBUMMANAGER.getAlbum(AlbumItem);
     return AlbumItem;
   });
-  let Artists = results.body.artists?.items.map(ArtistObject => {
+  let Artists = SpotifyResults.body.artists?.items.map(ArtistObject => {
     const ArtistItem = new Artist().FromSpotify(ArtistObject);
     SPOTICI_ARTISTMANAGER.getArtist(ArtistItem);
     return ArtistItem;

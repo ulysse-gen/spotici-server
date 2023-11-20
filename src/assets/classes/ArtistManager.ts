@@ -41,8 +41,8 @@ export default class ArtistManager {
         return db.query("SELECT * FROM artists WHERE id = ?", [ArtistID]);
     }
 
-    async searchQueryDB(Query: string) {
-        return db.query("SELECT * FROM artists WHERE name LIKE ?", [`%${Query}%`]);
+    async searchQueryDB(Query: string, amount = 10, from = 0) {
+        return db.query(`SELECT * FROM artists WHERE name LIKE ? LIMIT ${from}, ${amount}`, [amount, `%${Query}%`]);
     }
 
     async createArtistOnDB(Artist: Artist) {

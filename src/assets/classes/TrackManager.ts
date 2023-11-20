@@ -39,8 +39,8 @@ export default class TrackManager {
         return db.query("SELECT * FROM tracks WHERE id = ?", [ArtistID]);
     }
 
-    async searchQueryDB(Query: string) {
-        return await db.query("SELECT * FROM tracks WHERE name LIKE ? OR albumName LIKE ? OR artistsNames LIKE ?", [`%${Query}%`, `%${Query}%`, `%${Query}%`]);
+    async searchQueryDB(Query: string, amount = 10, from = 0) {
+        return await db.query(`SELECT * FROM tracks WHERE name LIKE ? OR albumName LIKE ? OR artistsNames LIKE ? LIMIT ${from}, ${amount}`, [amount, `%${Query}%`, `%${Query}%`, `%${Query}%`]);
     }
 
     async createTrackOnDB(Track: Track) {

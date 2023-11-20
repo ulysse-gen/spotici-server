@@ -41,8 +41,8 @@ export default class AlbumManager {
         return await db.query("SELECT * FROM albums WHERE id = ?", [AlbumId]);
     }
 
-    async searchQueryDB(Query: string) {
-        return await db.query("SELECT * FROM albums WHERE name LIKE ?", [`%${Query}%`]);
+    async searchQueryDB(Query: string, amount = 10, from= 0) {
+        return await db.query(`SELECT * FROM albums WHERE name LIKE ? LIMIT ${from}, ${amount}`, [amount, `%${Query}%`]);
     }
 
     async createAlbumOnDB(Album: Album) {
