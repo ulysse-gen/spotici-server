@@ -2,6 +2,8 @@ import { JwtPayload } from "jsonwebtoken";
 import API from "../assets/classes/API";
 import { i18n } from "i18next";
 import User from "../assets/classes/User";
+import * as socketio from "socket.io";
+import SServer from "../assets/classes/Socket";
 
 export {};
 
@@ -73,6 +75,19 @@ declare global {
     interface JWT {
       tokenIdentifier: string;
       username: string;
+    }
+
+    interface Socket extends socketio.Socket {
+      API?: API;
+      SERVER?: SServer;
+      JWT?: uGameClientToken;
+      User?: User;
+      disconnectWithReason?: function;
+    }
+
+    interface Server extends socketio.Server {
+      API?: API;
+      SERVER?: SServer;
     }
   }
 }
