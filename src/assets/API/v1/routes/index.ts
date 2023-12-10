@@ -6,6 +6,7 @@ var router = express.Router();
 import userController from './user';
 import trackController from './track';
 import libraryController from './library';
+import imageController from './images';
 
 router.get('/', async (req: express.Request, res: express.Response) => {
     res.status(404).json({
@@ -18,5 +19,6 @@ router.get('/', async (req: express.Request, res: express.Response) => {
 router.use('/users', userController);
 router.use('/tracks', trackController);
 router.use('/library', libraryController);
+router.use('/images', imageController);
 
 export default router;

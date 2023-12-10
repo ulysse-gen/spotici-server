@@ -2,8 +2,9 @@ import * as socketio from 'socket.io';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 
 import disconnect from './disconnect';
-import db from '../assets/API/v1/middlewares/db';
+import db from '../assets/db';
 import User from '../assets/classes/User';
+import { SPOTICI_USERMANAGER } from '..';
 
 
 export default function (socket: SpotIci.Socket) {
@@ -21,15 +22,17 @@ export default function (socket: SpotIci.Socket) {
         socket.JWT = decoded as SpotIci.JWT;
 
         try {
-            const UserQuery = (await db.query(`SELECT * FROM \`users\` WHERE username = ?;`, [socket.JWT.User]) as Array<SpotIci.DBClient>);
+            const UserQuery = (await db.query(`SELECT * FROM \`users\` WHERE username = ?;`, [socket.JWT.User]) as Array<SpotIci.ClientObject>);
             if (UserQuery.length == 0) return socket.disconnectWithReason('Invalid token.');
-            const user = new User(UserQuery[0]);
-            socket.User = user;
-            if (await user.IsTokenInvalid((decoded as JwtPayload).tokenIdentifier)) return socket.disconnectWithReason('Invalid token.');
-            let UserSockets = socket.SERVER?.clients.get(user.username) || [];
-            UserSockets?.push(socket);
-            socket.SERVER?.clients.set(user.username, UserSockets);
-            console.log(`${socket.User.nickname} connected to the server, ${UserSockets.length} current connections.`);
+            const user = SPOTICI_USERMANAGER.getUser(new User(UserQuery[0])).addSocket(socket);
+            if (await user.IsTokenInvalid((socket.JWT as JwtPayload).tokenIdentifier)) return socket.disconnectWithReason('Invalid token.');
+            socket.use((event, next) => {
+                SPOTICI_USERMANAGER.getUserBySocket(socket);
+                next();
+            });
+
+            console.log(`${user.nickname} connected to the socket, ${user.sockets.size} current connections.`);
+            socket.emit('authed', crypto.randomUUID());
         } catch(error) {
             console.log(error)
             return socket.disconnectWithReason('Invalid token.');

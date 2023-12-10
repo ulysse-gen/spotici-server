@@ -11,14 +11,12 @@ import { Duplex, Readable } from 'stream';
 export default class Track {
     public id!: string;
     public name!: string;
-    public album!: Album;
-    public artists!: Artist[];
+    public album?: Album;
+    public artists?: Artist[];
     public duration_ms!: number;
-    public release!: string;
     public disc_number!: number;
     public track_number!: number;
-
-    public artistsNames!: string[];
+    public explicit!: boolean;
     public MP3Buffer?: Buffer;
     constructor() {
     }
@@ -28,24 +26,22 @@ export default class Track {
         this.name = TrackObject.name;
         this.album = SPOTICI_ALBUMMANAGER.getAlbum(new Album().FromSpotify(TrackObject.album)) as Album;
         this.artists = TrackObject.artists.map(artist => SPOTICI_ARTISTMANAGER.getArtist(new Artist().FromSpotify(artist)) as Artist);
-        this.artistsNames = TrackObject.artists.map(artist => artist.name);
         this.duration_ms = TrackObject.duration_ms;
-        this.release = TrackObject.album.release_date;
         this.disc_number = TrackObject.disc_number;
         this.track_number = TrackObject.track_number;
+        this.explicit = TrackObject.explicit;
         return this;
     }
 
-    async FromDB(TrackObject: SpotIci.DBTrack) {
+    FromDB(TrackObject: SpotIci.TrackObjectSimplified) {
         this.id = TrackObject.id;
         this.name = TrackObject.name;
-        this.album = await SPOTICI_ALBUMMANAGER.getAlbumById(TrackObject.album);
-        this.artists = await Promise.all(JSON.parse(TrackObject.artists).map(async artist => SPOTICI_ARTISTMANAGER.getArtistById(artist)));
-        this.artistsNames = JSON.parse(TrackObject.artistsNames);
+        if (TrackObject.album)this.album = new Album().FromDB(TrackObject.album);
+        if (TrackObject.artists)this.artists = TrackObject.artists.map(artist => new Artist().FromDB(artist))
         this.duration_ms = TrackObject.duration_ms;
-        this.release = TrackObject.release;
         this.disc_number = TrackObject.disc_number;
         this.track_number = TrackObject.track_number;
+        this.explicit = TrackObject.explicit;
         return this;
     }
 
@@ -53,7 +49,7 @@ export default class Track {
         const ytmusic = await new YTMusic().initialize() as YTMusic;
 
         if (!this.MP3Buffer) {
-            const YTSong = await ytmusic.searchSongs(`${this.name} - ${this.artists.map(artist => artist.name).join(' ')}`).then(songs => songs[0]);
+            const YTSong = await ytmusic.searchSongs(`${this.name} - ${(this.artists) ? this.artists.map(artist => artist.name).join(' ') : ""}`).then(songs => songs[0]);
             const { mp3 } = await YTGet.getVideoMP3Binary(`https://www.youtube.com/watch?v=${YTSong.videoId}`);
             this.MP3Buffer = mp3;
         }

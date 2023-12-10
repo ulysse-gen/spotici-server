@@ -1,7 +1,8 @@
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import express from "express";
-import db from './db';
+import db from '../../../db';
 import User from '../../../classes/User';
+import { SPOTICI_USERMANAGER } from '../../../..';
 
 export const PermissionLevel = {
     'SYSTEM': 500,
@@ -28,13 +29,18 @@ export function checkJWT (req: express.Request, res: express.Response, next: exp
             } else {
                 try {
                     req.JWT = decoded as SpotIci.JWT;
-                    const UserQuery = (await db.query(`SELECT * FROM \`users\` WHERE username = ?;`, [req.JWT.User]) as Array<SpotIci.DBClient>);
+                    const UserQuery = (await db.query(`SELECT users.*, JSON_ARRAYAGG(JSON_OBJECT('size', image.size, 'url', image.url)) AS images
+                    FROM users 
+                    JOIN image_link ON image_link.userId = users.id
+                    JOIN images AS image ON image.id = image_link.imageId
+                    WHERE users.username = ?
+                    GROUP BY users.id, image.id;`, [req.JWT.User]) as Array<SpotIci.ClientObject>);
                     if (UserQuery.length == 0) return res.status(401).json({
                         name   : req.t('name'), 
                         status : 401, 
                         message: req.t('security.invalid_token')
                     });
-                    const user = new User(UserQuery[0]);
+                    const user = SPOTICI_USERMANAGER.getUser(new User(UserQuery[0]));
                     req.User = user;
                     if (await user.IsTokenInvalid((decoded as JwtPayload).tokenIdentifier))return res.status(401).json({
                         name   : req.t('name'), 
@@ -64,7 +70,7 @@ export function checkJWT (req: express.Request, res: express.Response, next: exp
 
 export function requirePermissionLevel (requiredPermissionLevel: number) {
     return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-        let userPermissionLevel = req.User.GetPermissionLevel();
+        let userPermissionLevel = await req.User.GetPermissionLevel();
         if (userPermissionLevel >= requiredPermissionLevel) {
             return next();
         } else {

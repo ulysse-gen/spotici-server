@@ -4,6 +4,7 @@ import { i18n } from "i18next";
 import User from "../assets/classes/User";
 import * as socketio from "socket.io";
 import SServer from "../assets/classes/Socket";
+import Track from "../assets/classes/Track";
 
 export {};
 
@@ -19,50 +20,45 @@ declare global {
   }
 
   namespace SpotIci {
-    interface DBClient {
-      numId: number;
+
+    interface ClientObject {
+      id: number;
       username: string;
       nickname: string;
       email: string;
       password: string;
-      permissionLevel: number;
-      invalidatedTokens: string;
-      creationTimestamp: Date;
-      updateTimestamp: Date;
-      accountState: string;
-      profilePicture: string;
+      creationTimestamp: string;
+      updateTimestamp: string;
+      state: string;
+      images: [{size: string, url: string}];
     }
 
-    interface DBTrack {
-      numId: number;
+
+    interface TrackObjectSimplified {
       id: string;
-      name: string;
-      album: string;
-      albumName: string;
-      artists: string;
-      artistsNames: string;
-      duration_ms: number;
-      release: string;
       track_number: number;
       disc_number: number;
+      name: string;
+      explicit: boolean;
+      duration_ms: number;
+      album: AlbumObjectSimplified;
+      artists: Array<ArtistObjectSimplified>
     }
 
-    interface DBAlbum {
-      numId: number;
+    interface AlbumObjectSimplified {
       id: string;
       name: string;
-      artists: string;
-      artistsNames: string;
-      release: string;
-      total_tracks: number;
-      image: string | undefined;
+      release_date: string;
+      release_date_precision: string;
+      artists: Array<ArtistObjectSimplified>
+      tracks: Array<TrackObjectSimplified>
     }
 
-    interface DBArtist {
-      numId: number;
+    interface ArtistObjectSimplified {
       id: string;
       name: string;
-      image?: string;
+      albums: Array<AlbumObjectSimplified>;
+      tracks: Array<TrackObjectSimplified>
     }
 
     interface FileTrack {
@@ -81,8 +77,16 @@ declare global {
       API?: API;
       SERVER?: SServer;
       JWT?: uGameClientToken;
-      User?: User;
+      USER?: User;
       disconnectWithReason?: function;
+      data: {
+        isPlaying?: boolean;
+        name?: string;
+        volume?: number;
+        progression?: number;
+        track?: Track;
+        UUID: string;
+      }
     }
 
     interface Server extends socketio.Server {

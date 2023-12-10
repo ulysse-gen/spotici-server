@@ -2,8 +2,9 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import express from 'express';
-import db from '../middlewares/db';
+import db from '../../../db';
 import User from '../../../classes/User';
+import { SPOTICI_USERMANAGER } from '../../../..';
 
 export async function auth (req: express.Request, res: express.Response, next: express.NextFunction) {
     const { username, password } = req.body;
@@ -22,16 +23,16 @@ export async function auth (req: express.Request, res: express.Response, next: e
     });
 
     try {
-        const UserQuery = (await db.query(`SELECT * FROM \`users\` WHERE username = ?;`, [username])) as Array<SpotIci.DBClient>;
+        const UserQuery = (await db.query(`SELECT * FROM \`users\` WHERE username = ?;`, [username])) as Array<SpotIci.ClientObject>;
         if (UserQuery.length == 0) return res.status(401).json({
             name   : req.t('name'), 
             status : 401, 
             message: req.t('route.user.auth.user_not_found')
         });
-        const user = new User(UserQuery[0]);
+        const user = SPOTICI_USERMANAGER.getUser(new User(UserQuery[0]));
         
 
-        user.CheckPassword(password, function(err, response) {
+        user.CheckPassword(password, async function(err, response) {
             if (err) return res.status(500).json({
                 name   : req.t('name'), 
                 status : 500, 
@@ -41,8 +42,9 @@ export async function auth (req: express.Request, res: express.Response, next: e
 
             if (response) {
                 const expireIn = 24 * 60 * 60;
+                const tokenIdentifier = crypto.randomBytes(8).toString('hex');
                 const token    = jwt.sign({
-                    tokenIdentifier: crypto.randomBytes(8).toString('hex'),
+                    tokenIdentifier,
                     User: user.username
                 },
                 req.API.secret,
@@ -50,6 +52,7 @@ export async function auth (req: express.Request, res: express.Response, next: e
                     expiresIn: expireIn
                 });
 
+                await user.PushToken(tokenIdentifier, expireIn);
                 res.header('Authorization', 'Bearer ' + token);
 
                 return res.status(200).setHeader('Authorization', "Bearer " + token).json({
@@ -109,7 +112,7 @@ export async function register (req: express.Request, res: express.Response, nex
     });
 
     try {
-        const user = (await db.query("SELECT * FROM `users` WHERE `username` = ? OR `email` = ?;", [username, email])) as Array<SpotIci.DBClient>;
+        const user = (await db.query("SELECT * FROM `users` WHERE `username` = ? OR `email` = ?;", [username, email])) as Array<SpotIci.ClientObject>;
         if (user.length != 0) {
             if (user[0].email == email){
                 return res.status(401).json({
@@ -126,6 +129,7 @@ export async function register (req: express.Request, res: express.Response, nex
 
         const hashedPassword = await bcrypt.hash(password, 11);
         await db.execute("INSERT INTO `users` (`username`, `nickname`, `email`, `password`) VALUES (?, ?, ?, ?);", [username, username, email, hashedPassword]);
+        await db.execute(`INSERT INTO permissions (userId) SELECT user.id FROM permissions JOIN users AS user ON user.username = ?;`, [username]);
 
         return res.status(200).json({
             name   : req.t('name'), 
@@ -151,18 +155,23 @@ export async function getUserByUsername (req: express.Request, res: express.Resp
         message: req.t('route.user.getUserByUsername.username_required')
     });
 
-    const UserQuery = (await db.query(`SELECT * FROM \`users\` WHERE username = ?;`, [username])) as Array<SpotIci.DBClient>;
+    const UserQuery = (await db.query(`SELECT users.*, JSON_ARRAYAGG(JSON_OBJECT('size', image.size, 'url', image.url)) AS images
+    FROM users 
+    JOIN image_link ON image_link.userId = users.id
+    JOIN images AS image ON image.id = image_link.imageId
+    WHERE users.username = ?
+    GROUP BY users.id, image.id;`, [username])) as Array<SpotIci.ClientObject>;
     if (UserQuery.length == 0) return res.status(401).json({
         name   : req.t('name'), 
         status : 401, 
         message: req.t('route.user.@.user_not_found')
     });
-    const user = new User(UserQuery[0]);
+    const user = SPOTICI_USERMANAGER.getUser(new User(UserQuery[0]));
     return res.status(200).json({
         name   : req.t('name'), 
         status : 200, 
         message: req.t('route.user.@.success'),
-        data: user.ToClientClient()
+        data: user.ToClient()
     });
 }
 

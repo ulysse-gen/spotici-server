@@ -23,9 +23,11 @@ import Socket from "./assets/classes/Socket";
 import TrackManager from './assets/classes/TrackManager';
 import AlbumManager from './assets/classes/AlbumManager';
 import ArtistManager from './assets/classes/ArtistManager';
+import UserManager from './assets/classes/UserManager';
 
 export const SPOTICI_API = new API().Start();
 export const SPOTICI_SOCKET = new Socket().Start();
 export const SPOTICI_TRACKMANAGER = new TrackManager();
 export const SPOTICI_ALBUMMANAGER = new AlbumManager();
 export const SPOTICI_ARTISTMANAGER = new ArtistManager();
+export const SPOTICI_USERMANAGER = new UserManager();

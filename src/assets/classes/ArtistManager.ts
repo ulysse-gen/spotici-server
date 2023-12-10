@@ -1,6 +1,6 @@
 //TrackManager Class
 import _ from 'lodash';
-import db from '../API/v1/middlewares/db';
+import db from '../db';
 import Artist from './Artist';
 
 export default class ArtistManager {
@@ -12,6 +12,10 @@ export default class ArtistManager {
     getArtist(Artist: Artist): Artist {
         if (Artist.id) {
             if (this.artists.get(Artist.id)){
+                if (!this.artists.get(Artist.id)?.albums && Artist?.albums || !this.artists.get(Artist.id)?.tracks && Artist.tracks){
+                    this.addArtist(Artist);
+                    return Artist;
+                }
                 return this.artists.get(Artist.id) as Artist;
             }else {
                 this.addArtist(Artist);
@@ -38,11 +42,34 @@ export default class ArtistManager {
     }
 
     async searchIdDB(ArtistID: string) {
-        return db.query("SELECT * FROM artists WHERE id = ?", [ArtistID]);
+        return db.query(`SELECT artist.*, 
+        JSON_ARRAYAGG(JSON_OBJECT('name', album.name, 'id', album.id, 'release_date', album.release_date, 'release_date_precision', album.release_date_precision, 'artists',
+            (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', artist.name, 'id', artist.id)) OVER (PARTITION BY album.id))
+        )) OVER (PARTITION BY artist.id) AS albums,
+        JSON_ARRAYAGG(JSON_OBJECT('name', tracks.name, 'id', tracks.id, 'track_number', tracks.track_number, 'disc_number', tracks.disc_number, 'explicit', tracks.explicit, 'duration_ms', tracks.duration_ms)) OVER (PARTITION BY artist.id) AS tracks
+        FROM artists AS artist
+        JOIN album_artist ON (album_artist.artistId = artist.id)
+        JOIN albums AS album ON (album.id = album_artist.albumId)
+        JOIN album_track ON (album_track.albumId = album.id)
+        JOIN tracks ON (tracks.id = album_track.trackId)
+        WHERE artist.id = ?
+        GROUP BY tracks.id, album.id, artist.id;`, [ArtistID]);
     }
 
     async searchQueryDB(Query: string, amount = 10, from = 0) {
-        return db.query(`SELECT * FROM artists WHERE name LIKE ? LIMIT ${from}, ${amount}`, [amount, `%${Query}%`]);
+        return await db.query(`SELECT artist.*, 
+        JSON_ARRAYAGG(JSON_OBJECT('name', album.name, 'id', album.id, 'release_date', album.release_date, 'release_date_precision', album.release_date_precision, 'artists',
+            (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', artist.name, 'id', artist.id)) OVER (PARTITION BY album.id))
+        )) OVER (PARTITION BY artist.id) AS albums,
+        JSON_ARRAYAGG(JSON_OBJECT('name', tracks.name, 'id', tracks.id, 'track_number', tracks.track_number, 'disc_number', tracks.disc_number, 'explicit', tracks.explicit, 'duration_ms', tracks.duration_ms)) OVER (PARTITION BY artist.id) AS tracks
+        FROM artists AS artist
+        JOIN album_artist ON (album_artist.artistId = artist.id)
+        JOIN albums AS album ON (album.id = album_artist.albumId)
+        JOIN album_track ON (album_track.albumId = album.id)
+        JOIN tracks ON (tracks.id = album_track.trackId)
+        WHERE tracks.name LIKE ? OR album.name LIKE ? OR artist.name LIKE ?
+        GROUP BY tracks.id, album.id, artist.id
+        LIMIT ${from}, ${amount}`, [`%${Query}%`, `%${Query}%`, `%${Query}%`]);
     }
 
     async createArtistOnDB(Artist: Artist) {

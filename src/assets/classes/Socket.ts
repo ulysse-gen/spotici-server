@@ -4,7 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import http from 'http';
 
-import { SPOTICI_API } from "../../index";
+import { SPOTICI_API, SPOTICI_USERMANAGER } from "../../index";
 import API from './API';
 
 //Events
@@ -16,7 +16,6 @@ export default class Server {
     private io: SpotIci.Server;
     private port: number;
     public API: API;
-    public clients: Map<string, Array<SpotIci.Socket>>;
     constructor() {
         this.app = express();
         this.server = http.createServer(this.app);
@@ -31,17 +30,17 @@ export default class Server {
         this.io.SERVER = this;
 
         this.port = 4000;
-
-        this.clients = new Map<string, Array<SpotIci.Socket>>;
     }
 
     Start() {
         this.app.use(cors());
         this.app.get('/', (req, res) => res.status(200));
 
-        this.io.use((socket: SpotIci.Socket, next) => {
+        this.io.use(async (socket: SpotIci.Socket, next) => {
             socket.API = this.API;
             socket.SERVER = this;
+            attachEvents(socket);
+
             socket.disconnectWithReason = (reason: string) => {
                 socket.emit('kicked', reason);
                 socket.disconnect();
@@ -56,4 +55,13 @@ export default class Server {
             console.log(`Socket server listening on ${this.port}`);
         });
     }
+}
+
+import AnnounceEvent from '../../events/announce';
+import UpdateEvent from '../../events/update';
+import User from './User';
+
+function attachEvents(socket: SpotIci.Socket) {
+    socket.on('announce', (data) => AnnounceEvent(socket, data));
+    socket.on('update', (data) => UpdateEvent(socket, data));
 }

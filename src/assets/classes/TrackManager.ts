@@ -1,7 +1,8 @@
 //TrackManager Class
 import _ from 'lodash';
 import Track from './Track';
-import db from '../API/v1/middlewares/db';
+import db from '../db';
+import Album from './Album';
 
 export default class TrackManager {
     public tracks: Map<string, Track>;
@@ -12,6 +13,10 @@ export default class TrackManager {
     getTrack(Track: Track): Track {
         if (Track.id) {
             if (this.tracks.get(Track.id)){
+                if (!this.tracks.get(Track.id)?.album && Track.album || !this.tracks.get(Track.id)?.artists && Track.artists){
+                    this.addTrack(Track);
+                    return Track;
+                }
                 return this.tracks.get(Track.id) as Track;
             }else {
                 this.addTrack(Track);
@@ -35,20 +40,48 @@ export default class TrackManager {
         return FetchedTrack;
     }
 
-    async searchIdDB(ArtistID: string) {
-        return db.query("SELECT * FROM tracks WHERE id = ?", [ArtistID]);
+    async searchIdDB(TrackID: string) {
+        return db.query(`SELECT track.*, album.name AS albumName, 
+        JSON_ARRAYAGG(JSON_OBJECT('name', artist.name, 'id', artist.id)) OVER (PARTITION BY track.id) AS artists,
+        JSON_OBJECT('name', album.name, 'id', album.id, 'release_date', album.release_date, 'release_date_precision', album.release_date_precision, 'artists',
+            (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', artist.name, 'id', artist.id)) OVER (PARTITION BY album.id))
+        ) AS album
+        FROM tracks AS track
+        JOIN album_track ON (album_track.trackId = track.id)
+        JOIN albums AS album ON (album.id = album_track.albumId)
+        JOIN album_artist ON (album_artist.albumId = album.id)
+        JOIN artists AS artist ON (artist.id = album_artist.artistId)
+        WHERE track.id = ?
+        GROUP BY track.id, album.id, artist.id;`, [TrackID]);
     }
 
     async searchQueryDB(Query: string, amount = 10, from = 0) {
-        return await db.query(`SELECT * FROM tracks WHERE name LIKE ? OR albumName LIKE ? OR artistsNames LIKE ? LIMIT ${from}, ${amount}`, [amount, `%${Query}%`, `%${Query}%`, `%${Query}%`]);
-    }
-
-    async createTrackOnDB(Track: Track) {
-        return db.execute('INSERT INTO `tracks` (`id`, `name`, `album`, `albumName`, `artists`, `artistsNames`, `duration_ms`, `release`, `disc_number`, `track_number`) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `tracks` WHERE `id`=?)', [Track.id, Track.name, Track.album.id, Track.album.name, JSON.stringify(Track.artists.map(artist => artist.id)), JSON.stringify(Track.artists.map(artist => artist.name)), Track.duration_ms, Track.release, Track.disc_number, Track.track_number, Track.id]);
+        return await db.query(`SELECT track.*, album.name AS albumName, 
+        JSON_ARRAYAGG(JSON_OBJECT('name', artist.name, 'id', artist.id)) OVER (PARTITION BY track.id) AS artists,
+        JSON_OBJECT('name', album.name, 'id', album.id, 'release_date', album.release_date, 'release_date_precision', album.release_date_precision, 'artists',
+            (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', artist.name, 'id', artist.id)) OVER (PARTITION BY album.id))
+        ) AS album
+        FROM tracks AS track
+        JOIN album_track ON (album_track.trackId = track.id)
+        JOIN albums AS album ON (album.id = album_track.albumId)
+        JOIN album_artist ON (album_artist.albumId = album.id)
+        JOIN artists AS artist ON (artist.id = album_artist.artistId)
+        WHERE track.name LIKE ? OR album.name LIKE ? OR artist.name LIKE ?
+        GROUP BY track.id, album.id, artist.id
+        LIMIT ${from}, ${amount};`, [`%${Query}%`, `%${Query}%`, `%${Query}%`]);
     }
 
     async createTracksOnDB(Tracks: Array<Track>) {
-        let Queries = Tracks.map(Track => { return { sql: 'INSERT INTO `tracks` (`id`, `name`, `album`, `albumName`, `artists`, `artistsNames`, `duration_ms`, `release`, `disc_number`, `track_number`) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM `tracks` WHERE `id`=?)', params: [Track.id, Track.name, Track.album.id, Track.album.name, JSON.stringify(Track.artists.map(artist => artist.id)), JSON.stringify(Track.artists.map(artist => artist.name)), Track.duration_ms, Track.release, Track.disc_number, Track.track_number, Track.id]}});
+        let Queries = Tracks.map(Track => { return { 
+            sql: 'INSERT INTO tracks (`id`, `track_number`, `disc_number`, `name`, `explicit`, `duration_ms`) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT id FROM tracks WHERE id=?);', params: [Track.id, Track.track_number, Track.disc_number, Track.name, Track.explicit, Track.duration_ms, Track.id]
+        }});
+        return db.queryTransaction(Queries);
+    }
+
+    async createJunctionsOnDB(Tracks: Array<Track>) {
+        let Queries = Tracks.filter(Track => Track.album).map(Track => { return { 
+            sql: `INSERT INTO album_track (albumId, trackId) SELECT '${(Track.album as Album).id}', '${Track.id}'  WHERE NOT EXISTS (SELECT albumId FROM album_track WHERE albumId='${(Track.album as Album).id}' AND trackId='${Track.id}')`
+        }});
         return db.queryTransaction(Queries);
     }
 }

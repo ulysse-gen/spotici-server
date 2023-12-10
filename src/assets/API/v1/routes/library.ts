@@ -3,7 +3,7 @@ import express from "express";
 var router = express.Router();
 
 import { getMine } from '../services/user';
-import { query, queryFrom, querySpotify } from '../services/library';
+import { Query, QueryFrom, QuerySpotify } from '../services/library';
 import { PermissionLevel, checkJWT, requirePermissionLevel } from '../middlewares/security';
 
 router.get('/', async (req: express.Request, res: express.Response) => {
@@ -14,8 +14,8 @@ router.get('/', async (req: express.Request, res: express.Response) => {
     });
 });
 
-router.get('/query/:query', checkJWT, requirePermissionLevel(PermissionLevel.USER), query);
-router.get('/query/:query/force', checkJWT, requirePermissionLevel(PermissionLevel.USER), querySpotify);
-router.get('/query/:query/:from', checkJWT, requirePermissionLevel(PermissionLevel.USER), queryFrom);
+router.get('/query/:query', checkJWT, requirePermissionLevel(PermissionLevel.USER), Query);
+router.get('/query/:query/force', checkJWT, requirePermissionLevel(PermissionLevel.USER), QuerySpotify);
+router.get('/query/:query/:from', checkJWT, requirePermissionLevel(PermissionLevel.USER), QueryFrom);
 
 export default router;

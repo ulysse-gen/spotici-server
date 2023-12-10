@@ -1,12 +1,164 @@
 import express from 'express';
 import fs from "fs/promises";
 import path from "path";
-import NodeID3 from 'node-id3';
 import { SPOTICI_ALBUMMANAGER, SPOTICI_ARTISTMANAGER, SPOTICI_TRACKMANAGER, spotifyApi } from '../../../..';
 import Track from '../../../classes/Track';
 import Album from '../../../classes/Album';
 import Artist from '../../../classes/Artist';
 
+export async function QuerySpotify(req: express.Request, res: express.Response) {
+  const { query } = req.params;
+
+  if (!query)return res.status(400).json({
+      name   : req.t('name'), 
+      status : 400, 
+      message: req.t('route.tracks.query.query_required')
+  });
+
+  const SpotifyResults = await spotifyApi.search(query, ["album", "artist", "playlist", "track"]).catch(() => undefined);
+
+  if (!SpotifyResults)return res.status(500).json({
+    name   : req.t('name'), 
+    status : 500, 
+    message: req.t('route.tracks.query.failure')
+  });
+
+  let Tracks = SpotifyResults.body.tracks?.items.map(TrackObject => {
+    const TrackItem = new Track().FromSpotify(TrackObject);
+    SPOTICI_TRACKMANAGER.getTrack(TrackItem);
+    return TrackItem;
+  });
+  let Albums = SpotifyResults.body.albums?.items.map(AlbumObject => {
+    const AlbumItem = new Album().FromSpotify(AlbumObject);
+    SPOTICI_ALBUMMANAGER.getAlbum(AlbumItem);
+    return AlbumItem;
+  });
+  let Artists = SpotifyResults.body.artists?.items.map(ArtistObject => {
+    const ArtistItem = new Artist().FromSpotify(ArtistObject);
+    SPOTICI_ARTISTMANAGER.getArtist(ArtistItem);
+    return ArtistItem;
+  });
+
+  Tracks?.forEach(track => {
+    if (track.album && !Albums?.map(album => album.id).includes(track.album.id))Albums?.push(track.album);
+  });
+  Tracks?.forEach(track => {
+    if (track.artists)track.artists.forEach(artist => {
+      if (!Artists?.map(artist2 => artist2.id).includes(artist.id))Artists?.push(artist);
+    })
+  });
+  Albums?.forEach(album => {
+    album.artists.forEach(artist => {
+      if (!Artists?.map(artist2 => artist2.id).includes(artist.id))Artists?.push(artist);
+    })
+  });
+
+  if (Tracks && Tracks.length != 0)await SPOTICI_TRACKMANAGER.createTracksOnDB(Tracks);
+  if (Albums && Albums.length != 0)await SPOTICI_ALBUMMANAGER.createAlbumsOnDB(Albums);
+  if (Artists && Artists.length != 0)await SPOTICI_ARTISTMANAGER.createArtistsOnDB(Artists);
+
+  if (Tracks && Tracks.length != 0)await SPOTICI_TRACKMANAGER.createJunctionsOnDB(Tracks);
+  if (Albums && Albums.length != 0)await SPOTICI_ALBUMMANAGER.createJunctionsOnDB(Albums);
+
+  let SearchData = {
+    tracks: Tracks,
+    artists: Artists,
+    albums: Albums,
+    playlists: []
+  }
+
+  return res.status(200).json({
+    name   : req.t('name'), 
+    status : 200, 
+    message: req.t('route.tracks.query.success'),
+    data: SearchData
+  });
+}
+
+export async function Query (req: express.Request, res: express.Response) {
+  const { query } = req.params;
+
+  if (!query)return res.status(400).json({
+    name   : req.t('name'), 
+    status : 400, 
+    message: req.t('route.tracks.query.query_required')
+  });
+
+  let ResultsPromises = {
+    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query) as Array<SpotIci.TrackObjectSimplified>,
+    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query) as Array<SpotIci.AlbumObjectSimplified>,
+    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query) as Array<SpotIci.ArtistObjectSimplified>
+  }
+
+  const Tracks = ResultsPromises.tracks.map(TrackObject => SPOTICI_TRACKMANAGER.getTrack(new Track().FromDB(TrackObject)));
+  const Albums = ResultsPromises.albums.map(AlbumObject => SPOTICI_ALBUMMANAGER.getAlbum(new Album().FromDB(AlbumObject)));
+  const Artists = ResultsPromises.artists.map(ArtistObject => SPOTICI_ARTISTMANAGER.getArtist(new Artist().FromDB(ArtistObject)));
+
+
+  let SearchData = {
+    tracks: Tracks,
+    artists: Artists,
+    albums: Albums,
+    playlists: []
+  }
+
+  return res.status(200).json({
+    name   : req.t('name'), 
+    status : 200, 
+    message: req.t('route.tracks.query.success'),
+    data: SearchData
+  });
+}
+
+export async function QueryFrom (req: express.Request, res: express.Response) {
+  const { query, from = "10" } = req.params;
+
+  if (!query)return res.status(400).json({
+    name   : req.t('name'), 
+    status : 400, 
+    message: req.t('route.tracks.query.query_required')
+  });
+
+  if (!from)return res.status(400).json({
+    name   : req.t('name'), 
+    status : 400, 
+    message: req.t('route.tracks.query.from_required')
+  });
+
+  const fromNumb = parseInt(from);
+  if ((!fromNumb && fromNumb != 0) || typeof fromNumb != "number")return res.status(400).json({
+    name   : req.t('name'), 
+    status : 400, 
+    message: req.t('route.tracks.query.from_is_not_number'),
+    fromNumb
+  });
+
+  let ResultsPromises = {
+    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.TrackObjectSimplified>,
+    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.AlbumObjectSimplified>,
+    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.ArtistObjectSimplified>
+  }
+
+  const Tracks = ResultsPromises.tracks.map(TrackObject => SPOTICI_TRACKMANAGER.getTrack(new Track().FromDB(TrackObject)));
+  const Albums = ResultsPromises.albums.map(AlbumObject => SPOTICI_ALBUMMANAGER.getAlbum(new Album().FromDB(AlbumObject)));
+  const Artists = ResultsPromises.artists.map(ArtistObject => SPOTICI_ARTISTMANAGER.getArtist(new Artist().FromDB(ArtistObject)));
+
+
+  let SearchData = {
+    tracks: Tracks,
+    artists: Artists,
+    albums: Albums,
+    playlists: []
+  }
+
+  return res.status(200).json({
+    name   : req.t('name'), 
+    status : 200, 
+    message: req.t('route.tracks.query.success'),
+    data: SearchData
+  });
+}
+/*
 export async function query (req: express.Request, res: express.Response) {
   const { query } = req.params;
 
@@ -17,9 +169,9 @@ export async function query (req: express.Request, res: express.Response) {
   });
 
   let results = {
-    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query) as Array<SpotIci.DBTrack>,
-    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query) as Array<SpotIci.DBArtist>,
-    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query) as Array<SpotIci.DBAlbum>,
+    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query) as Array<SpotIci.TrackObjectSimplified>,
+    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query) as Array<SpotIci.ArtistObjectSimplified>,
+    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query) as Array<SpotIci.AlbumObjectSimplified>,
     playlists: []
   }
 
@@ -65,9 +217,9 @@ export async function queryFrom (req: express.Request, res: express.Response) {
   });
 
   let results = {
-    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.DBTrack>,
-    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.DBArtist>,
-    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.DBAlbum>,
+    tracks: await SPOTICI_TRACKMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.TrackObjectSimplified>,
+    artists: await SPOTICI_ARTISTMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.ArtistObjectSimplified>,
+    albums: await SPOTICI_ALBUMMANAGER.searchQueryDB(query, 10, fromNumb) as Array<SpotIci.AlbumObjectSimplified>,
     playlists: []
   }
 
@@ -152,9 +304,12 @@ export async function querySpotify (req: express.Request, res: express.Response)
     })
   });
 
-  if (Tracks && Tracks.length != 0)SPOTICI_TRACKMANAGER.createTracksOnDB(Tracks);
-  if (Albums && Albums.length != 0)SPOTICI_ALBUMMANAGER.createAlbumsOnDB(Albums);
-  if (Artists && Artists.length != 0)SPOTICI_ARTISTMANAGER.createArtistsOnDB(Artists);
+  if (Tracks && Tracks.length != 0)await SPOTICI_TRACKMANAGER.createTracksOnDB(Tracks);
+  if (Albums && Albums.length != 0)await SPOTICI_ALBUMMANAGER.createAlbumsOnDB(Albums);
+  if (Artists && Artists.length != 0)await SPOTICI_ARTISTMANAGER.createArtistsOnDB(Artists);
+
+  if (Tracks && Tracks.length != 0)await SPOTICI_TRACKMANAGER.createJunctionsOnDB(Tracks);
+  if (Albums && Albums.length != 0)await SPOTICI_ALBUMMANAGER.createJunctionsOnDB(Albums);
 
   let SearchData = {
     tracks: Tracks,
@@ -170,7 +325,7 @@ export async function querySpotify (req: express.Request, res: express.Response)
     data: SearchData
   });
 }
-
+*/
 export async function walk(directory: string) {
   let fileList: string[] = [];
 
